@@ -4,9 +4,3 @@ SELECT userid, u.first_name, u.last_name, u.level, time, ip, request, status, ag
 FROM clickstream c 
 LEFT JOIN web_users u 
 ON c.userid = u.user_id;
-
-{
-    depends:
-            - clickstream
-            - web_users
-}

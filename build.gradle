@@ -51,6 +51,8 @@ dependencies {
    compile group: 'org.slf4j', name: 'slf4j-simple', version: '+'
    compile 'com.konghq:unirest-java:+'
 
+   compile 'org.yaml:snakeyaml:1.25'
+
    // Gradle Properties
    // It also has the Common library in it, thus the dependency here
    compile "gradle.plugin.com.redpillanalytics:gradle-properties:+"
@@ -71,7 +73,7 @@ repositories {
 
 gradlePlugin {
    plugins {
-      gradleConfluent {
+      sqlPipeline {
          id = "com.redpillanalytics.${rootProject.name}"
          implementationClass = 'com.redpillanalytics.gradle.SqlPipeline'
       }
@@ -80,15 +82,15 @@ gradlePlugin {
 
 pluginBundle {
 
-   website = 'https://github.com/RedPillAnalytics/gradle-confluent'
-   vcsUrl = 'https://github.com/RedPillAnalytics/gradle-confluent'
+   website = "https://github.com/RedPillAnalytics/${rootProject.name}"
+   vcsUrl = "https://github.com/RedPillAnalytics/${rootProject.name}"
 
    plugins {
-      gradleConfluent {
-         id = 'com.redpillanalytics.gradle-confluent'
-         displayName = 'gradle-confluent'
-         description = "A plugin for deploying streaming applications to a Confluent Kafka cluster."
-         tags = ['kafka', 'confluent', 'ksql', 'streams']
+      sqlPipeline {
+         id = "com.redpillanalytics.${rootProject.name}"
+         displayName = rootProject.name
+         description = "A plugin for building SQL-based data pipelines."
+         tags = ['sql', 'kafka', 'confluent', 'ksql', 'streams']
          version = project.version
       }
    }

@@ -13,12 +13,11 @@ class ListTopicsTask extends DefaultTask {
 
    ListTopicsTask() {
       description = "List all topics."
-      group = project.extensions.confluent.taskGroup
+      group = project.extensions.sql.workflowGroup
    }
 
    @TaskAction
    def listTopics(){
-
       new KsqlRest().getTopics().each { topic ->
          println "Name: $topic.name, Registered: $topic.registered, Partitions: ${topic.replicaInfo.size()}, Consumers: $topic.consumerCount, Consumer Groups: $topic.consumerGroupCount"
       }

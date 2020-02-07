@@ -1,20 +1,18 @@
 package com.redpillanalytics.gradle
 
 import com.redpillanalytics.gradle.tasks.ListTopicsTask
+import com.redpillanalytics.gradle.tasks.PipelineTask
 import groovy.util.logging.Slf4j
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.publish.maven.MavenPublication
-import org.gradle.api.tasks.Copy
-import org.gradle.api.tasks.Sync
-import org.gradle.api.tasks.bundling.Zip
+import org.gradle.api.file.FileTree
 
 @Slf4j
 class SqlPipeline implements Plugin<Project> {
 
    /**
-   * Extension name
-   */
+    * Extension name
+    */
    static final String EXTENSION = 'sql'
 
    /**
@@ -29,21 +27,18 @@ class SqlPipeline implements Plugin<Project> {
       // apply the Gradle plugin extension and the context container
       applyExtension(project)
 
-      // get the taskGroup
-      String taskGroup = project.extensions."$EXTENSION".taskGroup
-
       // show all topics
       project.task('listTopics', type: ListTopicsTask) {}
 
       // create deploy task
-      project.task('run') {
-         group taskGroup
+      project.tasks.register('run') {
+         group project.extensions."$EXTENSION".workflowGroup
          description "Execute any configured SQL run tasks."
       }
 
       // create deploy task
-      project.task('deploy') {
-         group taskGroup
+      project.tasks.register('deploy') {
+         group project.extensions."$EXTENSION".workflowGroup
          description "Execute any configured SQL deployment tasks."
       }
 
@@ -51,6 +46,36 @@ class SqlPipeline implements Plugin<Project> {
          // Go look for any -P properties that have "$EXTENSION." in them
          // If so... update the extension value
          project.pluginProps.setParameters(project, EXTENSION)
+
+         // get the location of the KSQL source files
+         File pipelineDir = project.file(project.extensions."$EXTENSION".getPipelinePath())
+         log.warn "pipelineDir: ${pipelineDir.getCanonicalPath()}"
+
+         File pipelineBuildDir = project.file("${project.buildDir}/${project.extensions."$EXTENSION".pipelineBuildName}")
+         log.warn "pipelineBuildDir: ${pipelineBuildDir.canonicalPath}"
+
+         File pipelineDeployDir = project.file("${project.buildDir}/${project.extensions."$EXTENSION".pipelineDeployName}")
+         log.warn "pipelineDeployDir: ${pipelineDeployDir.canonicalPath}"
+
+         FileTree sqlTree = project.fileTree(dir: pipelineDir, includes: ['**/*.sql', '**/*.SQL', '**/*.ksql', '**/*.KSQL'])
+         FileTree yamlTree = project.fileTree(dir: pipelineDir, includes: ['**/*.yaml'])
+
+         sqlTree.sort().each { sql ->
+            def config = project.extensions."$EXTENSION".getSqlConfig(sql)
+            project.tasks.register(project.extensions."$EXTENSION".getTaskName(config.name), PipelineTask) {
+               description config.description
+               group project.extensions."$EXTENSION".pipelineGroup
+               sourceSql sql.text
+            }
+         }
+
+         sqlTree.sort().each { sql ->
+            def config = project.extensions."$EXTENSION".getSqlConfig(sql)
+            if (config.after) {
+               project.tasks."${project.extensions."$EXTENSION".getTaskName(config.name)}".mustRunAfter config.after
+            }
+         }
+
       }
    }
 

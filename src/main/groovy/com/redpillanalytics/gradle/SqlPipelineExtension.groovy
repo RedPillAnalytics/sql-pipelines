@@ -1,32 +1,24 @@
 package com.redpillanalytics.gradle
 
+import com.redpillanalytics.common.Utils
 import groovy.util.logging.Slf4j
+import org.yaml.snakeyaml.Yaml
 
 @Slf4j
-class ConfluentPluginExtension {
+class SqlPipelineExtension {
 
    /**
-    * The group name to use for all tasks. Default: 'confluent'.
+    * The group name to use for all Pipeline tasks. Default: 'SQL Pipeline'.
     */
-   String taskGroup = 'SQL'
+   String pipelineGroup = 'SQL Pipeline'
 
    /**
-    * Enable KSQL pipeline support. Default: true.
+    * The group name to use for all other SQL tasks. Default: 'SQL Workflow'.
     */
-   Boolean enablePipelines = true
+   String workflowGroup = 'SQL Workflow'
 
    /**
-    * Enable KSQL UD(A)F support. Default: true.
-    */
-   Boolean enableFunctions = true
-
-   /**
-    * Enable Kafka Streams support. Default: true.
-    */
-   Boolean enableStreams = true
-
-   /**
-    * Base source directory for the Confluent plugin. Default: 'src/main'.
+    * Base source directory for the SQL Pipelines plugin. Default: 'src/main'.
     */
    String sourceBase = 'src/main'
 
@@ -49,16 +41,6 @@ class ConfluentPluginExtension {
     * The name of the Pipeline deploy directory in the project build directory. Default: 'pipeline'.
     */
    String pipelineDeployName = 'pipeline'
-
-   /**
-    * The name of the Function deploy directory in the project build directory. Default: 'function'.
-    */
-   String functionDeployName = 'function'
-
-   /**
-    * If populated, the KSQL Function JAR file will be renamed to this value during the copy. This makes it easy to hand-off to downstream deployment mechanisms. Default: null.
-    */
-   String functionArtifactName
 
    /**
     * The name of the Pipeline deployment 'create' script, which contains all the persistent statements that need to be executed. Default: 'ksql-script.sql'.
@@ -86,27 +68,64 @@ class ConfluentPluginExtension {
    String pipelinePattern = 'pipeline'
 
    /**
-    * The pattern used for matching the function deployment artifact. Default: 'function'.
-    */
-   String functionPattern = 'function'
-
-   /**
-    * The path of the Streams configuration file. A relative path will be resolved in the project directory, while absolute paths are resolved absolutely. Default: 'streams.config'.
-    */
-   String configPath = 'streams.config'
-
-   /**
-    * The environment to pass when configuring {@link #configPath}. This uses the ConfigSlurper concept of default values with environmental overloads. Default: 'development'.
-    */
-   String configEnv = 'development'
-
-   /**
-    * Provides the path for Pipeline source files.
+    * Provides the path for Pipeline source directory.
     *
-    * @return The full path of the Pipeline source files. Uses {@link #pipelineSourcePath} first if it exists, and if it doesn't (the default), then it uses {@link #sourceBase} and {@link #pipelineSourceName}.
+    * @return The full path of the Pipeline source directory. Uses {@link #pipelineSourcePath} first if it exists, and if it doesn't (the default), then it uses {@link #sourceBase} and {@link #pipelineSourceName}.
     */
    String getPipelinePath() {
-
       return (pipelineSourcePath ?: "${sourceBase}/${pipelineSourceName}")
+   }
+
+   /**
+    * Return a normalized task name for SQL Pipeline tasks.
+    *
+    * @return the task name.
+    */
+   def getTaskName(String name) {
+      return ("pipeline" + name.replaceAll("(_)([A-Za-z0-9])", { Object[] obj -> obj[2].toUpperCase() }).capitalize())
+   }
+
+   /**
+    * Return a Groovy representation of a YAML file.
+    *
+    * @return The Groovy representation of a YAML configuration
+    */
+   def getConfig(File file) {
+      return new Yaml().load(file.text)
+   }
+
+   /**
+    * Return a Groovy representation of a YAML file associated with a SQL file.
+    *
+    * @return The Groovy representation of a YAML configuration
+    */
+   def getSqlConfig(File file) {
+      Yaml yaml = new Yaml()
+      def config
+
+      try {
+         config = getConfig(Utils.getModifiedFile(file, 'yaml'))
+      } catch (FileNotFoundException e) {
+         config = [:]
+      }
+
+      if (!config.name) {
+         config.name = Utils.getFileBase(file)
+      }
+
+      if (!config.description) {
+         config.description = "Default model name ${Utils.getFileBase(file)}"
+      }
+
+      if (!config.schema) {
+         config.schema = file.parentFile.name
+      }
+
+      if (!config.delete) {
+         config.delete = false
+      }
+
+      log.warn "Config: ${config}"
+      return config
    }
 }
