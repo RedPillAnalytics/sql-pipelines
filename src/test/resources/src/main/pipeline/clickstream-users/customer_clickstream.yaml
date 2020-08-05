@@ -1,0 +1,5 @@
+---
+after:
+  - clickstream
+  - web_users
+delete: true

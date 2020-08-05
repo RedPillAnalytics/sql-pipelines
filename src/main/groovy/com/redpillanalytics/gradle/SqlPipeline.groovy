@@ -1,7 +1,7 @@
 package com.redpillanalytics.gradle
 
+import com.redpillanalytics.gradle.tasks.KsqlPipelineTask
 import com.redpillanalytics.gradle.tasks.ListTopicsTask
-import com.redpillanalytics.gradle.tasks.PipelineTask
 import groovy.util.logging.Slf4j
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -13,7 +13,7 @@ class SqlPipeline implements Plugin<Project> {
    /**
     * Extension name
     */
-   static final String EXTENSION = 'sql'
+   static String EXTENSION = 'sql'
 
    /**
     * Apply the Gradle plugin
@@ -47,7 +47,7 @@ class SqlPipeline implements Plugin<Project> {
          // If so... update the extension value
          project.pluginProps.setParameters(project, EXTENSION)
 
-         // get the location of the KSQL source files
+         // get the location of the source files
          File pipelineDir = project.file(project.extensions."$EXTENSION".getPipelinePath())
          log.warn "pipelineDir: ${pipelineDir.getCanonicalPath()}"
 
@@ -58,24 +58,32 @@ class SqlPipeline implements Plugin<Project> {
          log.warn "pipelineDeployDir: ${pipelineDeployDir.canonicalPath}"
 
          FileTree sqlTree = project.fileTree(dir: pipelineDir, includes: ['**/*.sql', '**/*.SQL', '**/*.ksql', '**/*.KSQL'])
-         FileTree yamlTree = project.fileTree(dir: pipelineDir, includes: ['**/*.yaml'])
 
+         // create all the tasks
          sqlTree.sort().each { sql ->
             def config = project.extensions."$EXTENSION".getSqlConfig(sql)
-            project.tasks.register(project.extensions."$EXTENSION".getTaskName(config.name), PipelineTask) {
+            def taskName = project.extensions."$EXTENSION".getTaskName(config.name)
+            project.tasks.register(taskName, KsqlPipelineTask) {
                description config.description
-               group project.extensions."$EXTENSION".pipelineGroup
+               group config.group
+               materialize config.materialize
                sourceSql sql.text
+               objectName config.name
             }
+
+            project.tasks.run.dependsOn taskName
          }
 
+         // define the ordering
          sqlTree.sort().each { sql ->
             def config = project.extensions."$EXTENSION".getSqlConfig(sql)
             if (config.after) {
-               project.tasks."${project.extensions."$EXTENSION".getTaskName(config.name)}".mustRunAfter config.after
+               log.warn "Entering after closure..."
+               def policy = (project.extensions."$EXTENSION".dependencyPolicy=='forced') ? 'dependsOn' : 'mustRunAfter'
+               log.warn "policy: $policy"
+               project.tasks."${project.extensions."$EXTENSION".getTaskName(config.name)}"."$policy" config.after
             }
          }
-
       }
    }
 

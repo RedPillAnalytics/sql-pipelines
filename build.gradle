@@ -98,6 +98,7 @@ pluginBundle {
 
 testSets {
    ksqlServerTest
+   ksqlPipelineTest
 }
 
 //tasks.deployTest.mustRunAfter tasks.buildTest

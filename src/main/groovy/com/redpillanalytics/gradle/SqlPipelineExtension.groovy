@@ -33,6 +33,11 @@ class SqlPipelineExtension {
    String pipelineSourcePath
 
    /**
+    * Policy for handling dependencies. When 'ordered', dependencies will not be executed unless they already exist in the graph. When 'forced', dependencies will be added to the graph. Default: 'ordered'.
+    */
+   String dependencyPolicy = 'ordered'
+
+   /**
     * The name of the Pipeline build directory in the project build directory. Default: 'pipeline'.
     */
    String pipelineBuildName = 'pipeline'
@@ -91,7 +96,42 @@ class SqlPipelineExtension {
     * @return The Groovy representation of a YAML configuration
     */
    def getConfig(File file) {
-      return new Yaml().load(file.text)
+      try {
+         return new Yaml().load(file.text)
+      } catch (FileNotFoundException e) {
+         return [:]
+      }
+   }
+
+   /**
+    * Return a Groovy representation of a YAML file with same name as the parent directory.
+    *
+    * @return The Groovy representation of a YAML file with same name as the parent directory.
+    */
+   def getParentConfig(File file) {
+      def config = getConfig(new File(file.parentFile, "model.yaml"))
+      assert !config.name
+      assert !config.description
+   }
+
+   /**
+    * Return a configuration value compared between two configurations, setting a default if both are null.
+    *
+    * @return A configuration value.
+    */
+   def getConfigValue(def child, def parent, String property, def defaultValue) {
+      def value
+      if (child?."$property") {
+         log.debug "'${property}' was in the child file."
+         value = child?."$property"
+      } else if (parent?."$property") {
+         log.debug "'${property}' was in the parent file."
+         value = parent?."$property"
+      } else {
+         log.debug "'$property' not found in child or parent. Using default."
+         value = defaultValue
+      }
+      return value
    }
 
    /**
@@ -100,32 +140,40 @@ class SqlPipelineExtension {
     * @return The Groovy representation of a YAML configuration
     */
    def getSqlConfig(File file) {
+      log.warn "Configuration for: ${file.canonicalPath}."
       Yaml yaml = new Yaml()
-      def config
 
-      try {
-         config = getConfig(Utils.getModifiedFile(file, 'yaml'))
-      } catch (FileNotFoundException e) {
-         config = [:]
-      }
+      def config = [:], childConfig, parentConfig
 
-      if (!config.name) {
-         config.name = Utils.getFileBase(file)
-      }
+      // get the child configuration
+      childConfig = getConfig(Utils.getModifiedFile(file, 'yaml'))
 
-      if (!config.description) {
-         config.description = "Default model name ${Utils.getFileBase(file)}"
-      }
+      // get the parent configuration
+      parentConfig = getParentConfig(file)
 
-      if (!config.schema) {
-         config.schema = file.parentFile.name
-      }
+      // first lets get the name of the target object
+      config.name = getConfigValue(childConfig, parentConfig, "name", Utils.getFileBase(file).replace('-', '_'))
 
-      if (!config.delete) {
-         config.delete = false
-      }
+      // first lets get description, which is used for Task description
+      config.description = getConfigValue(childConfig, parentConfig, "description", "Create object(s) in '${file.name}'.")
 
-      log.warn "Config: ${config}"
+      // schema name
+      config.schema = getConfigValue(childConfig, parentConfig, "schema", file.parentFile.name.replace('-', '_'))
+
+      // delete boolean
+      config.delete = getConfigValue(childConfig, parentConfig, "delete", 'false').toBoolean()
+
+      // materialization strategy
+      config.materialize = getConfigValue(childConfig, parentConfig, "materialize", 'ignore')
+
+      // task grouping
+      config.group = getConfigValue(childConfig, parentConfig, "group", pipelineGroup)
+
+      // get dependencies
+      def after = getConfigValue(childConfig, parentConfig, "after", [])
+      config.after = after.collect{ getTaskName(it)}
+
+      log.debug "Config: ${config}"
       return config
    }
 }

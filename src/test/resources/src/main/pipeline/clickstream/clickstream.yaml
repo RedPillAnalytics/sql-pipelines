@@ -1,3 +1,4 @@
 ---
 name: clickstream
-description: Clickstream activity topic
+description: Clickstream activity topic.
+delete: true
